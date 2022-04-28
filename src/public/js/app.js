@@ -1,38 +1,81 @@
-const msgList = document.querySelector("ul");
-const msgForm = document.querySelector("#message");
-const nickname = document.querySelector("#nick");
-const socket = new WebSocket(`ws://${window.location.host}`);
+const socket = io();
 
-socket.addEventListener("open", () => {
-  console.log("connected to server🙆🏻‍♀️");
-});
+const welcome = document.getElementById("welcome");
+const form = welcome.querySelector("form");
+const room = document.getElementById("room");
+room.hidden = true;
+let roomName = "";
 
-socket.addEventListener("message", (message) => {
-  console.log(message);
-  console.log(`from server : ${message.data}`);
-  const li = document.createElement("li");
-  li.innerHTML = message.data;
-  msgList.append(li);
-});
+let showRoom = (_roomName) => {
+  roomName = _roomName;
+  welcome.hidden = true;
+  room.hidden = false;
+  const h3 = room.querySelector("h3");
+  h3.innerText = `${roomName}방에 오신걸 환영합니다.`;
 
-socket.addEventListener("close", () => {
-  console.log("websocket closed🙅🏻‍♀️");
-});
-
-nickname.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const input = nickname.querySelector("input");
-  socket.send(makeMessage("nickname", input.value));
-});
-
-msgForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const input = msgForm.querySelector("input");
-  socket.send(makeMessage("message", input.value));
-  input.value = "";
-});
-
-let makeMessage = (type, payload) => {
-  const msg = { type, payload };
-  return JSON.stringify(msg);
+  const msgForm = room.querySelector("#msg");
+  const nameForm = room.querySelector("#name");
+  msgForm.addEventListener("submit", handleMessageSubmit);
+  nameForm.addEventListener("submit", handleNameSubmit);
 };
+
+let handleNameSubmit = (event) => {
+  event.preventDefault();
+  const input = room.querySelector("#name input");
+  const value = input.value;
+  socket.emit("nickname", value);
+};
+
+let handleMessageSubmit = (event) => {
+  event.preventDefault();
+  const input = room.querySelector("#msg input");
+  const value = input.value;
+  socket.emit("new_message", value, roomName, () => {
+    addMessage(`you : ${value}`);
+  });
+  input.value = "";
+};
+let handleRoomSubmit = (event) => {
+  event.preventDefault();
+  const input = form.querySelector("input");
+  socket.emit("enter_room", input.value, showRoom);
+  // socket.emit("enter_room", input.value, function (msg) {
+  //   console.log("서버에서 호출되어 실행되는 함수");
+  //   console.log(`서버로부터 받은 메세지 : ${msg}`);
+  // });
+  //emit의  1st argument : custom message, 2nd argument : payload, 3nd : function that will be excute at the server
+  //emit으로 여러개의 메세지를 보낼 수 있음 예)6개 7개 등등
+  //그러나 함수는 맨마지막 인자로 넣어줘야함
+  input.value = "";
+};
+form.addEventListener("submit", handleRoomSubmit);
+
+socket.on("welcome", (nickname, count) => {
+  addMessage(`${nickname} joined! ${count}`);
+});
+
+let addMessage = (message) => {
+  const ul = room.querySelector("ul");
+  const li = document.createElement("li");
+  li.innerText = message;
+  ul.append(li);
+};
+
+socket.on("bye", (nickname, count) => {
+  addMessage(`${nickname} leaved the room!(${count})`);
+});
+
+socket.on("new_message", addMessage);
+
+socket.on("room_change", (rooms) => {
+  const roomList = welcome.querySelector("ul");
+  roomList.innerHTML = "";
+  if (rooms.length === 0) {
+    return;
+  }
+  rooms.forEach((room) => {
+    const li = document.createElement("li");
+    li.innerText = room;
+    roomList.append(li);
+  });
+});
